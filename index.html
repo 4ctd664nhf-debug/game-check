@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f6f3">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="每日自律">
+  <meta name="description" content="簡潔的每日自律打卡與歷史紀錄工具">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <link rel="stylesheet" href="./style.css">
+  <title>每日自律</title>
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">DISCIPLINE · CONSISTENCY</p>
+        <h1>每日自律</h1>
+        <p class="subtitle">每天完成一點，慢慢成為更好的自己。</p>
+      </div>
+      <div class="date-chip" id="todayLabel"></div>
+    </header>
+
+    <nav class="tabs" aria-label="主要功能">
+      <button class="tab active" data-view="today">今日任務</button>
+      <button class="tab" data-view="history">歷史紀錄</button>
+      <button class="tab" data-view="settings">資料管理</button>
+    </nav>
+
+    <section id="todayView" class="view">
+      <article class="progress-card">
+        <div class="progress-head">
+          <div>
+            <p class="section-kicker">TODAY'S PROGRESS</p>
+            <h2>今日進度</h2>
+          </div>
+          <strong id="progressPercent">0%</strong>
+        </div>
+        <div class="progress-track"><div id="progressBar" class="progress-fill"></div></div>
+        <p class="progress-caption" id="progressCaption">已完成 0 / 0 項任務</p>
+      </article>
+
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">YOUR ROUTINE</p>
+          <h2>我的任務</h2>
+        </div>
+        <span class="count-pill" id="taskCount">0 / 20</span>
+      </div>
+
+      <form id="addForm" class="add-form">
+        <input id="newTask" type="text" maxlength="60" placeholder="輸入新的自律項目…" autocomplete="off" aria-label="新任務名稱">
+        <button class="primary-btn" type="submit" id="addBtn">新增</button>
+      </form>
+      <p class="helper">最多可設定 20 項任務。可隨時修改或刪除。</p>
+      <div id="taskList" class="task-list"></div>
+
+      <div class="action-row">
+        <button class="secondary-btn" id="resetBtn" type="button">重置今日勾選</button>
+        <button class="primary-btn" id="archiveBtn" type="button">封存今日紀錄</button>
+      </div>
+      <p class="helper bottom-note">跨日會自動建立新的一天，昨天的紀錄會保留。</p>
+    </section>
+
+    <section id="historyView" class="view hidden">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">YOUR JOURNEY</p>
+          <h2>歷史紀錄</h2>
+        </div>
+        <span class="count-pill" id="historyCount">0 天</span>
+      </div>
+      <div id="historyList" class="history-list"></div>
+    </section>
+
+    <section id="settingsView" class="view hidden">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">BACKUP & RESTORE</p>
+          <h2>資料管理</h2>
+        </div>
+      </div>
+      <article class="settings-card">
+        <h3>備份你的紀錄</h3>
+        <p>將任務與歷史紀錄匯出成 JSON 檔，換手機或清除瀏覽器資料前，建議先備份。</p>
+        <button class="primary-btn full" id="exportBtn" type="button">匯出備份檔</button>
+      </article>
+      <article class="settings-card">
+        <h3>還原備份</h3>
+        <p>選擇先前匯出的 JSON 檔。匯入後會以備份內容取代目前資料。</p>
+        <label class="file-label" for="importFile">選擇備份檔</label>
+        <input id="importFile" type="file" accept="application/json,.json" hidden>
+      </article>
+      <article class="settings-card warning-card">
+        <h3>重要提醒</h3>
+        <p>資料保存在目前裝置的瀏覽器中，不會自動同步到其他手機。請定期匯出備份。清除 Safari 網站資料也可能刪除打卡紀錄。</p>
+      </article>
+      <p class="version-note">每日自律 PWA · 版本 1.0</p>
+    </section>
+    <footer>把今天做好，就已經很棒了。</footer>
+  </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="./app.js"></script>
+</body>
+</html>
