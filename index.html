@@ -26,6 +26,7 @@
 
     <nav class="tabs" aria-label="主要功能">
       <button class="tab active" data-view="today">今日任務</button>
+      <button class="tab" data-view="memo">備忘錄</button>
       <button class="tab" data-view="history">歷史紀錄</button>
       <button class="tab" data-view="settings">資料管理</button>
     </nav>
@@ -65,6 +66,50 @@
       <p class="helper bottom-note">跨日會自動建立新的一天，昨天的紀錄會保留。</p>
     </section>
 
+    <section id="memoView" class="view hidden">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">YOUR MEMOS</p>
+          <h2>我的備忘錄</h2>
+        </div>
+        <span class="count-pill" id="memoCount">0 筆</span>
+      </div>
+      <p class="helper memo-intro">可新增「名稱＋次數」或「自由文字」，不影響每日任務完成率。</p>
+
+      <form id="memoForm" class="memo-form">
+        <label for="memoType" class="memo-label">備忘類型</label>
+        <select id="memoType" aria-label="備忘錄類型">
+          <option value="count">次數紀錄（例如：運動 3 次）</option>
+          <option value="text">文字備忘（自由輸入）</option>
+        </select>
+
+        <div id="memoCountFields" class="memo-fields">
+          <label class="memo-label" for="memoTitle">項目名稱</label>
+          <input type="text" id="memoTitle" maxlength="60" placeholder="例如：喝水、運動、閱讀" autocomplete="off">
+          <label class="memo-label" for="memoNumber">紀錄次數</label>
+          <div class="memo-number-field">
+            <input type="number" id="memoNumber" min="0" max="999999" step="1" inputmode="numeric" value="1" aria-label="次數">
+            <span>次</span>
+          </div>
+        </div>
+
+        <div id="memoTextFields" class="memo-fields" hidden>
+          <label class="memo-label" for="memoText">備忘內容</label>
+          <textarea id="memoText" rows="4" maxlength="1000" placeholder="輸入想記下來的文字…"></textarea>
+        </div>
+
+        <div class="memo-form-actions">
+          <button type="submit" class="primary-btn" id="memoSubmit">新增備忘錄</button>
+          <button type="button" class="secondary-btn hidden" id="memoCancel">取消修改</button>
+        </div>
+      </form>
+
+      <div class="section-heading memo-list-heading">
+        <h2>已儲存的備忘</h2>
+      </div>
+      <div id="memoList" class="memo-list" aria-live="polite"></div>
+    </section>
+
     <section id="historyView" class="view hidden">
       <div class="section-heading">
         <div>
@@ -85,7 +130,7 @@
       </div>
       <article class="settings-card">
         <h3>備份你的紀錄</h3>
-        <p>將任務與歷史紀錄匯出成 JSON 檔，換手機或清除瀏覽器資料前，建議先備份。</p>
+        <p>將任務與歷史紀錄匯出成 JSON 檔（不包含備忘錄）。換手機或清除瀏覽器資料前，建議先備份。</p>
         <button class="primary-btn full" id="exportBtn" type="button">匯出備份檔</button>
       </article>
       <article class="settings-card">
@@ -94,15 +139,23 @@
         <label class="file-label" for="importFile">選擇備份檔</label>
         <input id="importFile" type="file" accept="application/json,.json" hidden>
       </article>
+      <article class="settings-card">
+        <h3>備忘錄備份與還原</h3>
+        <p>備忘錄獨立儲存。請另行匯出備份；匯入備忘錄檔案後會取代目前所有備忘內容，但不影響原本的任務與歷史紀錄。</p>
+        <button class="primary-btn full" id="memoExportBtn" type="button">匯出備忘錄備份</button>
+        <label class="file-label memo-import-label" for="memoImportFile">匯入備忘錄備份</label>
+        <input id="memoImportFile" type="file" accept="application/json,.json" hidden>
+      </article>
       <article class="settings-card warning-card">
         <h3>重要提醒</h3>
         <p>資料保存在目前裝置的瀏覽器中，不會自動同步到其他手機。請定期匯出備份。清除 Safari 網站資料也可能刪除打卡紀錄。</p>
       </article>
-      <p class="version-note">每日自律 PWA · 版本 1.0</p>
+      <p class="version-note">每日自律 PWA · 備忘錄更新版 1.1</p>
     </section>
     <footer>把今天做好，就已經很棒了。</footer>
   </main>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="./app.js"></script>
+  <script src="./memo.js"></script>
 </body>
 </html>
