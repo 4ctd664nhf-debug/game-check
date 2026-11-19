@@ -111,15 +111,7 @@
           <span class="push-badge" id="pushBadge">未啟用</span>
         </div>
         <p id="pushStatus" role="status" aria-live="polite">尚未啟用推播。未連接後端時，僅能在 App 開啟期間提醒。</p>
-        <form id="pushConfigForm" class="push-config-form">
-          <label class="field-label" for="pushApiUrl">Cloudflare Worker 網址
-            <input id="pushApiUrl" type="url" inputmode="url" placeholder="https://你的名稱.workers.dev" autocomplete="url">
-          </label>
-          <label class="field-label" for="pushApiKey">私人連線金鑰（只儲存在此裝置）
-            <input id="pushApiKey" type="password" minlength="16" placeholder="部署後設定的 API_TOKEN" autocomplete="off">
-          </label>
-          <button class="secondary-btn" id="savePushConfigBtn" type="submit">儲存推播連線設定</button>
-        </form>
+        <p class="helper v3-auto-config"><strong>V3.0 個人隱私模式</strong>：無需帳號，也不必輸入 API_TOKEN 或 Cloudflare 網址。啟用後這台手機會自動取得專屬憑證，其他裝置無法用自己的憑證操作你的提醒。</p>
         <div class="push-buttons">
           <button class="primary-btn" type="button" id="enablePushBtn">啟用手機推播</button>
           <button class="secondary-btn" type="button" id="testPushBtn">發送測試通知</button>
@@ -160,13 +152,14 @@
       </article>
       <article class="settings-card warning-card">
         <h3>重要提醒</h3>
-        <p>任務、歷史紀錄及提醒清單儲存在此裝置，不會自動同步到其他手機。啟用推播後，提醒內容和時間也會送到你的 Cloudflare 後端，以便在 App 關閉時通知。推播金鑰不包含在備份中。清除瀏覽器資料前請先備份，並盡可能先停用舊裝置的推播。</p>
+        <p>任務、歷史紀錄及提醒清單儲存在此裝置，不會自動同步到其他手機。啟用推播後，提醒內容與時間會明文儲存在網站管理者的 Cloudflare D1 資料庫，以便在 App 關閉時通知。其他一般使用者無權存取你的提醒，但 Cloudflare 管理者仍可能查閱資料庫。每台手機的推播憑證不包含在備份中。清除瀏覽器資料前請先備份，並盡可能先停用舊裝置的推播。</p>
       </article>
-      <p class="version-note">每日自律 PWA · 版本 2.0（提醒版）</p>
+      <p class="version-note">每日自律 PWA · 版本 3.0（多人獨立推播版）</p>
     </section>
     <footer>把今天做好，就已經很棒了。</footer>
   </main>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="./push-config.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

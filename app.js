@@ -47,12 +47,12 @@ function writeState() {
 async function ensureToday() {
   const today = localDateKey();
   if (!state) {
-    state = { version:2, date:today, tasks:defaultTasks, history:[], reminders:[] };
+    state = { version:3, date:today, tasks:defaultTasks, history:[], reminders:[] };
     await writeState();
   } else if (!Array.isArray(state.reminders)) {
     // Upgrade existing V1 IndexedDB without deleting task or history data.
     state.reminders = [];
-    state.version = 2;
+    state.version = 3;
     await writeState();
     if (state.date !== today) await ensureToday();
   } else if (state.date !== today) {
@@ -172,7 +172,7 @@ $("importFile").addEventListener("change",async event=>{
           typeof r.at !== "string" || !Number.isFinite(new Date(r.at).getTime())) throw new Error("提醒資料格式不正確");
       return { id: crypto.randomUUID(), text: r.text.trim().slice(0,80), at: r.at, repeat: r.repeat };
     });
-    state={version:2,date:localDateKey(),tasks:imported.tasks.map(t=>({id:t.id||crypto.randomUUID(),name:String(t.name||"").slice(0,60),done:!!t.done})),history:imported.history,reminders:validatedReminders};
+    state={version:3,date:localDateKey(),tasks:imported.tasks.map(t=>({id:t.id||crypto.randomUUID(),name:String(t.name||"").slice(0,60),done:!!t.done})),history:imported.history,reminders:validatedReminders};
     await ensureToday(); await saveAndRender();
     if (pushConfig.enabled) await queuePushSync();
     showToast("備份還原成功");
@@ -181,7 +181,7 @@ $("importFile").addEventListener("change",async event=>{
 });
 (async function init(){
   try {
-    db=await openDB(); state=await readState(); await ensureToday(); render();
+    db=await openDB(); state=await readState(); await ensureToday(); if (state.version !== 3) { state.version = 3; await writeState(); } render();
     checkForegroundReminders().catch(console.error);
     if (pushConfig.enabled) queuePushSync();
     if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
@@ -194,31 +194,32 @@ $("importFile").addEventListener("change",async event=>{
 })();
 
 // --- Reminder UI, foreground reminders and optional Web Push integration ---
-const PUSH_STORAGE_KEY = "daily-discipline-push-v2";
-const DEVICE_STORAGE_KEY = "daily-discipline-device-v2";
+const PUSH_STORAGE_KEY = "daily-discipline-push-v3";
+const LEGACY_PUSH_STORAGE_KEY = "daily-discipline-push-v2";
 const MAX_REMINDERS = 30;
 let editingReminderId = null;
 let pushSyncChain = Promise.resolve();
 let pushSyncError = "";
+// The website owner configures this ONCE in web/push-config.js; users enter no API key/URL.
+const PUSH_API_URL = (() => {
+  try {
+    const url = new URL(String(window.DAILY_DISCIPLINE_PUSH_API || "").trim());
+    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash || url.pathname !== "/" ||
+        /YOUR_|REPLACE_|你的|範例/i.test(url.hostname)) return "";
+    return url.href.replace(/\/+$/, "");
+  } catch (_) { return ""; }
+})();
 let pushConfig = loadPushConfig();
 
 function loadPushConfig() {
   try {
-    const parsed = JSON.parse(localStorage.getItem(PUSH_STORAGE_KEY) || "{}");
-    return {
-      url: typeof parsed.url === "string" ? parsed.url : "",
-      token: typeof parsed.token === "string" ? parsed.token : "",
-      enabled: parsed.enabled === true
-    };
-  } catch (_) { return { url: "", token: "", enabled: false }; }
+    const data = JSON.parse(localStorage.getItem(PUSH_STORAGE_KEY) || "{}");
+    const token = typeof data.token === "string" && /^[A-Za-z0-9_-]{43}$/.test(data.token) ? data.token : "";
+    return { token, enabled: data.enabled === true && Boolean(token) };
+  } catch (_) { return { token: "", enabled: false }; }
 }
 function storePushConfig() {
   localStorage.setItem(PUSH_STORAGE_KEY, JSON.stringify(pushConfig));
-}
-function deviceId() {
-  let id = localStorage.getItem(DEVICE_STORAGE_KEY);
-  if (!id) { id = crypto.randomUUID(); localStorage.setItem(DEVICE_STORAGE_KEY, id); }
-  return id;
 }
 function toLocalInput(date) {
   const two = n => String(n).padStart(2, "0");
@@ -281,37 +282,41 @@ function renderPushStatus() {
   if (!badge || !status) return;
   badge.classList.toggle("connected", pushConfig.enabled && !pushSyncError);
   badge.textContent = pushConfig.enabled ? (pushSyncError ? "同步異常" : "已啟用") : "未啟用";
-  if (pushConfig.enabled) {
-    status.textContent = pushSyncError ? `推播已啟用，但提醒清單尚未同步：${pushSyncError}。請確認網路或重新開啟 App。` :
-      "手機推播已啟用。提醒時間將同步至 Cloudflare 排程服務；關閉 App 後仍可收到推播（需連線且允許通知）。";
-  } else if (pushConfig.url && pushConfig.token) {
-    status.textContent = "推播服務資訊已儲存。請按「啟用手機推播」，授權通知並完成訂閱。啟用前僅能在 App 開啟期間提醒。";
+  if (!PUSH_API_URL) {
+    status.textContent = "網站管理者尚未設定 Cloudflare Worker 網址。提醒可以儲存在手機，但 App 關閉時無法發送雲端推播。";
+  } else if (pushConfig.enabled) {
+    status.textContent = pushSyncError ? `推播已啟用，但提醒尚未同步：${pushSyncError}。請檢查網路或重新開啟 App。` :
+      "這台手機已獨立啟用雲端推播，無須輸入私人連線金鑰。其他使用者不能透過 App 讀取你的提醒。";
+  } else if (localStorage.getItem(LEGACY_PUSH_STORAGE_KEY)) {
+    status.textContent = "偵測到舊版 V2 推播設定。請按「啟用手機推播」，升級為 V3 專屬裝置憑證；原本的提醒會保留。";
   } else {
-    status.textContent = "尚未設定推播後端。你仍可建立提醒，但只能在 App 開啟時提醒。要讓鎖定的 iPhone 收到通知，請先按照部署說明建立 Cloudflare Worker。";
+    status.textContent = "不需要登入、填寫 Worker 網址或 API_TOKEN。請從 iPhone 主畫面開啟 App，按「啟用手機推播」即可。";
   }
   $("disablePushBtn").disabled = !pushConfig.enabled;
 }
-function normalizeAPIUrl(text) {
-  const url = new URL(text.trim());
-  if (url.protocol !== "https:" && !(url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname))) {
-    throw new Error("推播服務網址必須使用 HTTPS");
-  }
-  if (url.username || url.password || url.search || url.hash || url.pathname !== "/") {
-    throw new Error("請只輸入 Worker 的主網址，不要附加 /api、帳密或其他路徑");
-  }
-  return url.href.replace(/\/+$/, "");
-}
 async function apiRequest(path, options = {}) {
-  if (!pushConfig.url || !pushConfig.token) throw new Error("請先儲存推播服務網址與連線金鑰");
-  const response = await fetch(`${pushConfig.url}/api/${path}`, {
-    method: options.method || "GET",
-    headers: { "X-API-Key": pushConfig.token, ...(options.body ? { "Content-Type": "application/json" } : {}) },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-    cache: "no-store"
-  });
+  if (!PUSH_API_URL) throw new Error("網站尚未設定推播服務網址，請聯絡網站管理者");
+  const needsAuth = options.auth !== false;
+  if (needsAuth && !pushConfig.token) throw new Error("此裝置尚未建立專屬身分，請先啟用手機推播");
+  let response;
+  try {
+    response = await fetch(`${PUSH_API_URL}/api/${path}`, {
+      method: options.method || "GET",
+      headers: {
+        ...(needsAuth ? { Authorization: `Bearer ${pushConfig.token}` } : {}),
+        ...(options.body !== undefined ? { "Content-Type": "application/json" } : {})
+      },
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      cache: "no-store"
+    });
+  } catch (_) { throw new Error("無法連線到推播服務，請檢查網路或網站設定"); }
   let data = {};
-  try { data = await response.json(); } catch (_) { /* preserve HTTP status */ }
-  if (!response.ok) throw new Error(data.error || `連線失敗（HTTP ${response.status}）`);
+  try { data = await response.json(); } catch (_) { /* HTTP status is kept below. */ }
+  if (!response.ok) {
+    const error = new Error(data.error || `連線失敗（HTTP ${response.status}）`);
+    error.status = response.status;
+    throw error;
+  }
   return data;
 }
 function bytesFromBase64URL(string) {
@@ -343,7 +348,7 @@ function makeServerReminders() {
 async function syncPushReminders() {
   if (!pushConfig.enabled || !state) return false;
   try {
-    await apiRequest("sync", { method: "POST", body: { deviceId: deviceId(), reminders: makeServerReminders() } });
+    await apiRequest("sync", { method: "POST", body: { reminders: makeServerReminders() } });
     pushSyncError = "";
     renderPushStatus();
     return true;
@@ -450,25 +455,10 @@ $("reminderList").addEventListener("click", async event => {
   }
 });
 
-$("pushConfigForm").addEventListener("submit", event => {
-  event.preventDefault();
-  try {
-    const url = normalizeAPIUrl($("pushApiUrl").value);
-    const token = $("pushApiKey").value.trim();
-    if (token.length < 16) throw new Error("連線金鑰至少需要 16 個字元");
-    if (pushConfig.enabled && (url !== pushConfig.url || token !== pushConfig.token)) {
-      throw new Error("請先停用舊推播，再修改網址或金鑰");
-    }
-    pushConfig = { ...pushConfig, url, token };
-    storePushConfig();
-    renderPushStatus();
-    showToast("推播連線設定已儲存");
-  } catch (error) { showToast(error.message); }
-});
 $("enablePushBtn").addEventListener("click", async () => {
   const button = $("enablePushBtn");
   if (pushConfig.enabled) return showToast("手機推播已啟用");
-  if (!pushConfig.url || !pushConfig.token) return showToast("請先填寫並儲存推播連線設定");
+  if (!PUSH_API_URL) return alert("網站管理者尚未在 push-config.js 設定 Worker 網址，請先完成網站部署設定。");
   if (isIOSNotHomeScreen()) return alert("iPhone 請先用 Safari 將本網站「加入主畫面」，再從主畫面圖示開啟 App，才能啟用推播。");
   if (!("PushManager" in window) || !("Notification" in window) || !("serviceWorker" in navigator)) {
     return alert("目前瀏覽器或使用方式不支援 Web Push。iPhone 需 iOS 16.4 以上的主畫面 PWA。");
@@ -481,7 +471,8 @@ $("enablePushBtn").addEventListener("click", async () => {
   try {
     const permission = await permissionPromise;
     if (permission !== "granted") throw new Error("通知權限未開啟，請在手機設定中允許「每日自律」通知");
-    const { publicKey } = await apiRequest("config");
+    const { publicKey, version } = await apiRequest("config", { auth: false });
+    if (version !== 3) throw new Error("目前 Cloudflare 仍是舊版推播服務，請管理者先部署 V3 後端");
     if (!publicKey) throw new Error("伺服器尚未設定 VAPID 公開金鑰");
     const reg = await getServiceWorker();
     const applicationServerKey = bytesFromBase64URL(publicKey);
@@ -492,12 +483,20 @@ $("enablePushBtn").addEventListener("click", async () => {
       subscription = null;
     }
     if (!subscription) subscription = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey });
-    await apiRequest("subscribe", { method: "POST", body: { deviceId: deviceId(), subscription: subscription.toJSON() } });
+    // Create a random, private per-install credential. The shared V2 API_TOKEN is never used.
+    if (!pushConfig.token) {
+      const identity = await apiRequest("register", { method: "POST", auth: false, body: {} });
+      if (!/^[A-Za-z0-9_-]{43}$/.test(identity.token || "")) throw new Error("伺服器未回傳有效的裝置憑證");
+      pushConfig.token = identity.token;
+      storePushConfig(); // Keep identity for retry if subsequent subscription fails.
+    }
+    await apiRequest("subscribe", { method: "POST", body: { subscription: subscription.toJSON() } });
     pushConfig.enabled = true;
     storePushConfig();
+    localStorage.removeItem(LEGACY_PUSH_STORAGE_KEY); // No longer keep an old shared API_TOKEN.
     pushSyncError = "";
     const synced = await queuePushSync();
-    showToast(synced ? "手機推播已啟用" : "已訂閱推播，但提醒同步失敗，請稍後重試");
+    showToast(synced ? "這台手機已啟用獨立推播" : "已訂閱推播，但提醒同步失敗，請稍後重試");
   } catch (error) {
     alert(`啟用失敗：${error.message}\n\n請確認 Worker 已部署，且 iPhone 通知權限已開啟。`);
   } finally { button.disabled = false; renderPushStatus(); }
@@ -507,7 +506,7 @@ $("testPushBtn").addEventListener("click", async () => {
   button.disabled = true;
   try {
     if (pushConfig.enabled) {
-      await apiRequest("test", { method: "POST", body: { deviceId: deviceId() } });
+      await apiRequest("test", { method: "POST", body: {} });
       showToast("伺服器已接受測試推播，請確認手機通知");
     } else {
       if (isIOSNotHomeScreen()) throw new Error("iPhone 請先從主畫面圖示開啟 App");
@@ -522,25 +521,39 @@ $("testPushBtn").addEventListener("click", async () => {
 });
 $("disablePushBtn").addEventListener("click", async () => {
   if (!pushConfig.enabled) return;
-  if (!confirm("確定停用這台裝置的手機推播？已設定的提醒仍會留在 App 裡。")) return;
+  if (!confirm("確定停用這台裝置的推播？雲端中這台裝置的提醒也會一併移除，本機提醒不受影響。")) return;
   const button = $("disablePushBtn");
   button.disabled = true;
   try {
-    await apiRequest("unsubscribe", { method: "POST", body: { deviceId: deviceId() } });
-    const reg = await getServiceWorker();
-    const subscription = await reg.pushManager.getSubscription();
-    if (subscription) await subscription.unsubscribe();
-    pushConfig.enabled = false;
-    pushSyncError = "";
+    await apiRequest("unsubscribe", { method: "POST", body: {} });
+    pushConfig = { token: "", enabled: false };
     storePushConfig();
-    showToast("已停用手機推播，仍可使用前景提醒");
+    pushSyncError = "";
+    try {
+      const reg = await getServiceWorker();
+      const subscription = await reg.pushManager.getSubscription();
+      if (subscription) await subscription.unsubscribe();
+    } catch (_) { /* Server-side unsubscription is authoritative. */ }
+    showToast("已停用並移除這台裝置的雲端推播");
   } catch (error) {
-    alert(`停用失敗：${error.message}。為避免手機持續收到舊提醒，請確認可以連上推播服務後再停用。`);
+    if (error.status === 401) {
+      if (confirm("舊的裝置憑證已失效。要只清除本機推播設定並重新註冊嗎？雲端原有訂閱可能仍需管理者清理。")) {
+        pushConfig = { token: "", enabled: false };
+        storePushConfig();
+        try {
+          const reg = await getServiceWorker();
+          const subscription = await reg.pushManager.getSubscription();
+          if (subscription) await subscription.unsubscribe();
+        } catch (_) {}
+        pushSyncError = "";
+        showToast("本機已重置，請重新啟用推播");
+      }
+    } else {
+      alert(`停用失敗：${error.message}。為避免收到舊提醒，請先確認網路正常。`);
+    }
   } finally { button.disabled = false; renderPushStatus(); }
 });
 
-$("pushApiUrl").value = pushConfig.url;
-$("pushApiKey").value = pushConfig.token;
 resetReminderEditor();
 setInterval(() => {
   checkForegroundReminders().catch(console.error);

@@ -115,3 +115,7 @@ footer { text-align:center; color:#9aa29a; font-size:11px; padding:27px 0 0; }
   .reminder-fields { grid-template-columns: 1fr; }
   .reminder-card { padding: 12px 10px; }
 }
+
+/* V3: simple automatic device enrollment explanation. */
+.v3-auto-config { background: var(--green-soft); padding: 12px; border-radius: 10px; color: var(--green-dark); margin-bottom: 12px; }
+.v3-auto-config strong { color: var(--green-dark); }
