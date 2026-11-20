@@ -119,3 +119,8 @@ footer { text-align:center; color:#9aa29a; font-size:11px; padding:27px 0 0; }
 /* V3: simple automatic device enrollment explanation. */
 .v3-auto-config { background: var(--green-soft); padding: 12px; border-radius: 10px; color: var(--green-dark); margin-bottom: 12px; }
 .v3-auto-config strong { color: var(--green-dark); }
+
+/* V3.1: configurable daily task count */
+.task-limit-form { display: grid; gap: 13px; margin: 13px 0 0; }
+.task-limit-form .primary-btn { width: 100%; }
+.task-limit-status { margin-top: 12px; font-weight: 700; color: var(--green-dark); }

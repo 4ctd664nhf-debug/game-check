@@ -49,14 +49,14 @@
           <p class="section-kicker">YOUR ROUTINE</p>
           <h2>我的任務</h2>
         </div>
-        <span class="count-pill" id="taskCount">0 / 20</span>
+        <span class="count-pill" id="taskCount">0 / ∞</span>
       </div>
 
       <form id="addForm" class="add-form">
         <input id="newTask" type="text" maxlength="60" placeholder="輸入新的自律項目…" autocomplete="off" aria-label="新任務名稱">
         <button class="primary-btn" type="submit" id="addBtn">新增</button>
       </form>
-      <p class="helper">最多可設定 20 項任務。可隨時修改或刪除。</p>
+      <p class="helper" id="taskLimitHint">任務數量不限，可至「資料管理」調整。</p>
       <div id="taskList" class="task-list"></div>
 
       <div class="action-row">
@@ -135,10 +135,32 @@
     <section id="settingsView" class="view hidden">
       <div class="section-heading">
         <div>
-          <p class="section-kicker">BACKUP & RESTORE</p>
+          <p class="section-kicker">TASK SETTINGS & BACKUP</p>
           <h2>資料管理</h2>
         </div>
       </div>
+      <article class="settings-card">
+        <h3>任務數量設定</h3>
+        <p>可以選擇固定上限、自訂數量，或完全不設上限。修改設定不會刪除現有任務與歷史紀錄。</p>
+        <form id="taskLimitForm" class="task-limit-form">
+          <label class="field-label" for="taskLimitMode">任務數量上限
+            <select id="taskLimitMode">
+              <option value="unlimited">不限項數</option>
+              <option value="20">20 項</option>
+              <option value="30">30 項</option>
+              <option value="50">50 項</option>
+              <option value="100">100 項</option>
+              <option value="custom">自訂數量…</option>
+            </select>
+          </label>
+          <label class="field-label hidden" for="customTaskLimit" id="taskLimitCustomField">自訂上限（正整數）
+            <input id="customTaskLimit" type="number" min="1" step="1" inputmode="numeric" placeholder="例如：80">
+          </label>
+          <button class="primary-btn" type="submit">儲存任務設定</button>
+        </form>
+        <p class="helper task-limit-status" id="taskLimitStatus" role="status">目前任務上限：不限項數。</p>
+        <p class="helper">設定較小的上限不會刪除超出的任務，只會暫停新增。不限項數仍受瀏覽器儲存空間及效能限制。</p>
+      </article>
       <article class="settings-card">
         <h3>備份你的紀錄</h3>
         <p>將任務與歷史紀錄匯出成 JSON 檔，換手機或清除瀏覽器資料前，建議先備份。</p>
@@ -154,7 +176,7 @@
         <h3>重要提醒</h3>
         <p>任務、歷史紀錄及提醒清單儲存在此裝置，不會自動同步到其他手機。啟用推播後，提醒內容與時間會明文儲存在網站管理者的 Cloudflare D1 資料庫，以便在 App 關閉時通知。其他一般使用者無權存取你的提醒，但 Cloudflare 管理者仍可能查閱資料庫。每台手機的推播憑證不包含在備份中。清除瀏覽器資料前請先備份，並盡可能先停用舊裝置的推播。</p>
       </article>
-      <p class="version-note">每日自律 PWA · 版本 3.0（多人獨立推播版）</p>
+      <p class="version-note">每日自律 PWA · 版本 3.1（任務上限可自訂版）</p>
     </section>
     <footer>把今天做好，就已經很棒了。</footer>
   </main>

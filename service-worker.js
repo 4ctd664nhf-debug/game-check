@@ -1,4 +1,4 @@
-const CACHE_NAME = "daily-discipline-v3";
+const CACHE_NAME = "daily-discipline-v3-1-task-limit";
 const ASSETS = [
   "./", "./index.html", "./style.css", "./app.js", "./push-config.js",
   "./manifest.json", "./icons/icon-192.png", "./icons/icon-512.png"

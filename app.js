@@ -2,6 +2,9 @@ const DB_NAME = "daily-discipline-db";
 const DB_VERSION = 1;
 const STORE = "state";
 const STATE_KEY = "main";
+// null means no application-defined limit; available space depends on the device/browser.
+const DEFAULT_TASK_LIMIT = null;
+const TASK_LIMIT_PRESETS = [20, 30, 50, 100];
 const defaultTasks = [
   { id: crypto.randomUUID(), name: "早起，不賴床", done: false },
   { id: crypto.randomUUID(), name: "運動或健身", done: false },
@@ -44,25 +47,42 @@ function writeState() {
     tx.onerror = () => reject(tx.error);
   });
 }
+// A positive integer is a fixed limit; null is unlimited.
+function normalizeTaskLimit(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+function getTaskLimit() {
+  return normalizeTaskLimit(state.taskLimit);
+}
 async function ensureToday() {
   const today = localDateKey();
   if (!state) {
-    state = { version:3, date:today, tasks:defaultTasks, history:[], reminders:[] };
+    state = { version:3, date:today, tasks:defaultTasks, history:[], reminders:[], taskLimit:DEFAULT_TASK_LIMIT };
     await writeState();
-  } else if (!Array.isArray(state.reminders)) {
+    return;
+  }
+  let changed = false;
+  if (!Array.isArray(state.reminders)) {
     // Upgrade existing V1 IndexedDB without deleting task or history data.
     state.reminders = [];
     state.version = 3;
-    await writeState();
-    if (state.date !== today) await ensureToday();
-  } else if (state.date !== today) {
+    changed = true;
+  }
+  if (!Object.prototype.hasOwnProperty.call(state, "taskLimit") ||
+      state.taskLimit !== normalizeTaskLimit(state.taskLimit)) {
+    // Existing installations become unlimited without deleting any saved data.
+    state.taskLimit = DEFAULT_TASK_LIMIT;
+    changed = true;
+  }
+  if (state.date !== today) {
     // 跨日自動封存前一天，不覆蓋既有紀錄。
     const previous = snapshot(state.date, state.tasks);
     if (!state.history.some(item => item.date === state.date)) state.history.push(previous);
     state.date = today;
     state.tasks = state.tasks.map(task => ({...task, done:false}));
-    await writeState();
+    changed = true;
   }
+  if (changed) await writeState();
 }
 function snapshot(date,tasks) {
   const total = tasks.length, completed = tasks.filter(t=>t.done).length;
@@ -85,8 +105,12 @@ function render() {
   $("progressPercent").textContent = `${percent}%`;
   $("progressBar").style.width = `${percent}%`;
   $("progressCaption").textContent = `已完成 ${completed} / ${total} 項任務`;
-  $("taskCount").textContent = `${total} / 20`;
-  $("addBtn").disabled = total >= 20;
+  const taskLimit = getTaskLimit();
+  $("taskCount").textContent = `${total} / ${taskLimit === null ? "∞" : taskLimit}`;
+  $("addBtn").disabled = taskLimit !== null && total >= taskLimit;
+  $("taskLimitHint").textContent = taskLimit === null
+    ? "任務數量不限。可至「資料管理」設定固定上限或自訂數量。"
+    : `目前上限 ${taskLimit} 項。可至「資料管理」調整，已建立的任務不會被刪除。`;
   const list = $("taskList");
   if (!total) list.innerHTML = `<div class="empty-state">目前還沒有任務。<br>新增第一個自律目標，開始你的每日計畫吧！</div>`;
   else list.innerHTML = state.tasks.map(task => `
@@ -105,7 +129,42 @@ function render() {
       <div class="mini-track"><div class="mini-fill" style="width:${item.percent}%"></div></div>
       <div class="history-items">${(item.items||[]).map(task=>`<div class="history-item"><span class="mark">${task.done?"✓":"○"}</span><span>${escapeHTML(task.name)}</span></div>`).join("")}</div>
     </article>`).join("") : `<div class="empty-state">還沒有歷史紀錄。<br>每日完成後封存，或隔天開啟時會自動保存前一天紀錄。</div>`;
+  renderTaskLimitSettings();
 }
+function renderTaskLimitSettings() {
+  const limit = getTaskLimit();
+  const mode = limit === null ? "unlimited" : TASK_LIMIT_PRESETS.includes(limit) ? String(limit) : "custom";
+  $("taskLimitMode").value = mode;
+  $("customTaskLimit").value = mode === "custom" ? String(limit) : "60";
+  updateTaskLimitMode();
+  $("taskLimitStatus").textContent = `目前 ${state.tasks.length} 項任務；上限：${limit === null ? "不限項數" : `${limit} 項`}。`;
+}
+function updateTaskLimitMode() {
+  const custom = $("taskLimitMode").value === "custom";
+  $("taskLimitCustomField").classList.toggle("hidden", !custom);
+  $("customTaskLimit").required = custom;
+}
+$("taskLimitMode").addEventListener("change", updateTaskLimitMode);
+$("taskLimitForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const mode = $("taskLimitMode").value;
+  let limit = null;
+  if (mode === "custom") {
+    const raw = $("customTaskLimit").value.trim();
+    limit = Number(raw);
+    if (!/^[1-9]\d*$/.test(raw) || !Number.isSafeInteger(limit)) {
+      return showToast("請輸入有效的正整數作為任務上限");
+    }
+  } else if (mode !== "unlimited") {
+    limit = Number(mode);
+    if (!TASK_LIMIT_PRESETS.includes(limit)) return showToast("任務上限設定不正確");
+  }
+  state.taskLimit = limit;
+  await saveAndRender();
+  showToast(limit !== null && state.tasks.length > limit
+    ? `上限已設為 ${limit} 項；現有任務不會被刪除`
+    : "任務數量設定已儲存");
+});
 function switchView(view) {
   document.querySelectorAll(".tab").forEach(btn=>btn.classList.toggle("active",btn.dataset.view===view));
   ["today","reminders","history","settings"].forEach(name=>$(`${name}View`).classList.toggle("hidden",name!==view));
@@ -115,7 +174,10 @@ $("addForm").addEventListener("submit",async event=>{
   event.preventDefault();
   const input = $("newTask"), name = input.value.trim();
   if (!name) return;
-  if (state.tasks.length >= 20) return showToast("最多只能設定 20 項任務");
+  const limit = getTaskLimit();
+  if (limit !== null && state.tasks.length >= limit) {
+    return showToast(`已達 ${limit} 項上限，可至「資料管理」調整`);
+  }
   state.tasks.push({id:crypto.randomUUID(),name,done:false}); input.value="";
   await saveAndRender(); showToast("已新增任務");
 });
@@ -162,7 +224,7 @@ $("importFile").addEventListener("change",async event=>{
   const file=event.target.files[0]; if (!file) return;
   try {
     const imported=JSON.parse(await file.text());
-    if (!imported || !Array.isArray(imported.tasks) || !Array.isArray(imported.history) || imported.tasks.length>20) throw new Error("格式不正確");
+    if (!imported || !Array.isArray(imported.tasks) || !Array.isArray(imported.history)) throw new Error("格式不正確");
     if (!confirm("匯入備份會取代目前的任務與紀錄，確定繼續嗎？")) return;
     const reminders = Array.isArray(imported.reminders) ? imported.reminders : [];
     if (reminders.length > 30) throw new Error("提醒最多 30 筆");
@@ -172,7 +234,9 @@ $("importFile").addEventListener("change",async event=>{
           typeof r.at !== "string" || !Number.isFinite(new Date(r.at).getTime())) throw new Error("提醒資料格式不正確");
       return { id: crypto.randomUUID(), text: r.text.trim().slice(0,80), at: r.at, repeat: r.repeat };
     });
-    state={version:3,date:localDateKey(),tasks:imported.tasks.map(t=>({id:t.id||crypto.randomUUID(),name:String(t.name||"").slice(0,60),done:!!t.done})),history:imported.history,reminders:validatedReminders};
+    const importedTaskLimit = Object.prototype.hasOwnProperty.call(imported, "taskLimit")
+      ? normalizeTaskLimit(imported.taskLimit) : DEFAULT_TASK_LIMIT;
+    state={version:3,date:localDateKey(),tasks:imported.tasks.map(t=>({id:t.id||crypto.randomUUID(),name:String(t.name||"").slice(0,60),done:!!t.done})),history:imported.history,reminders:validatedReminders,taskLimit:importedTaskLimit};
     await ensureToday(); await saveAndRender();
     if (pushConfig.enabled) await queuePushSync();
     showToast("備份還原成功");
